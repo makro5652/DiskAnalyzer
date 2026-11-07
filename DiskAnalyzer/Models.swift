@@ -74,8 +74,9 @@ enum FileKind: Int, CaseIterable, Identifiable {
 
 final class FileNode: Identifiable, Hashable {
     let url: URL
-    let name: String
+    var name: String
     let isDirectory: Bool
+    var isHidden = false
     var size: Int64
     var kind: FileKind = .other
     var modified: Date?
@@ -110,13 +111,19 @@ final class FileNode: Identifiable, Hashable {
 
 extension FileNode: @unchecked Sendable {}
 
-private let byteFormatter: ByteCountFormatter = {
-    let f = ByteCountFormatter()
-    f.countStyle = .file
-    return f
-}()
-
-func formatBytes(_ n: Int64) -> String { byteFormatter.string(fromByteCount: n) }
+/// Dezimale Einheiten wie im Finder, immer drei signifikante Stellen: 95,9 GB · 4,51 GB · 471 GB.
+func formatBytes(_ n: Int64) -> String {
+    guard n > 0 else { return "0 KB" }
+    let units = ["Byte", "KB", "MB", "GB", "TB", "PB"]
+    var value = Double(n)
+    var unit = 0
+    while value >= 999.5, unit < units.count - 1 {
+        value /= 1000
+        unit += 1
+    }
+    let digits = unit == 0 || value >= 99.95 ? 0 : value >= 9.995 ? 1 : 2
+    return value.formatted(.number.precision(.fractionLength(digits))) + " " + units[unit]
+}
 
 func formatPercent(_ part: Int64, of total: Int64) -> String {
     guard total > 0 else { return "–" }
@@ -148,7 +155,7 @@ final class ScanContext: @unchecked Sendable {
 enum DiskScanner {
     private static let keys: [URLResourceKey] = [
         .isDirectoryKey, .isSymbolicLinkKey, .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
-        .contentModificationDateKey,
+        .contentModificationDateKey, .isHiddenKey,
     ]
 
     /// Pfade, die beim Scannen von „/“ Daten doppelt zählen würden (Firmlinks) oder keine echten Dateien sind.
@@ -156,6 +163,9 @@ enum DiskScanner {
 
     static func scan(_ url: URL, context: ScanContext) -> FileNode {
         let root = FileNode(url: url, isDirectory: true, size: 0)
+        if url.path == "/", let name = try? url.resourceValues(forKeys: [.volumeLocalizedNameKey]).volumeLocalizedName {
+            root.name = name
+        }
         fill(root, context, inBundle: false)
         return root
     }
@@ -193,6 +203,7 @@ enum DiskScanner {
                     child.parent = dir
                 }
                 child.modified = v?.contentModificationDate
+                child.isHidden = v?.isHidden == true || u.lastPathComponent.hasPrefix(".")
                 total += child.size
                 kids.append(child)
             }
@@ -222,7 +233,8 @@ enum CleanupRules {
         let p = n.parent
         if n.isDirectory {
             switch n.name {
-            case "node_modules": return "Node-Abhängigkeiten – mit „npm install“ jederzeit wiederherstellbar"
+            // Innerhalb eines App-Pakets gehört der Ordner zur App und wäre nicht wiederherstellbar.
+            case "node_modules" where !n.url.path.contains(".app/"): return "Node-Abhängigkeiten – mit „npm install“ jederzeit wiederherstellbar"
             case "DerivedData" where p?.name == "Xcode": return "Xcode-Build-Zwischendaten – werden beim nächsten Build neu erzeugt"
             case "Archives" where p?.name == "Xcode": return "Xcode-Archive – nur löschen, wenn du die Builds nicht mehr brauchst"
             case "iOS DeviceSupport" where p?.name == "Xcode": return "Xcode-Gerätesupport – wird beim nächsten Anschließen neu geladen"
@@ -282,18 +294,72 @@ extension Snapshot: @unchecked Sendable {}
 
 // MARK: - Filter & Tabs
 
-enum PanelTab: String, CaseIterable, Identifiable {
-    case tree, files, types, duplicates, cleanup
+enum MainTab: String, CaseIterable, Identifiable {
+    case structure, largest
+    var id: String { rawValue }
+    var label: String { self == .structure ? "Ordnerstruktur" : "Größte Dateien" }
+}
+
+enum CleanTab: String, CaseIterable, Identifiable {
+    case cleanup, duplicates, types
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .tree: "Baum"
-        case .files: "Dateien"
-        case .types: "Typen"
-        case .duplicates: "Duplikate"
         case .cleanup: "Aufräumen"
+        case .duplicates: "Duplikate"
+        case .types: "Typen"
         }
     }
+}
+
+/// Inhalt einer Spalte: große Objekte einzeln, der Rest in zwei Sammelzeilen.
+struct ColumnContent {
+    static let maxShown = 10
+    static let minShownSize: Int64 = 100_000
+
+    var shown: [FileNode] = []
+    var small: [FileNode] = []
+    var hidden: [FileNode] = []
+
+    var smallSize: Int64 { small.reduce(0) { $0 + $1.size } }
+    var hiddenSize: Int64 { hidden.reduce(0) { $0 + $1.size } }
+
+    init(_ folder: FileNode) {
+        for c in folder.children {   // nach Größe sortiert
+            if c.isHidden {
+                hidden.append(c)
+            } else if shown.count < Self.maxShown, c.size >= Self.minShownSize {
+                shown.append(c)
+            } else {
+                small.append(c)
+            }
+        }
+    }
+}
+
+enum ColumnGroup: String {
+    case small, hidden
+    func key(in folder: FileNode) -> String { folder.id + "#" + rawValue }
+}
+
+struct SidebarLocation: Identifiable, Hashable {
+    let title: String
+    let symbol: String
+    let url: URL
+    var id: String { url.path }
+}
+
+/// Ergebnis eines Scans, damit der Wechsel zwischen Speicherorten sofort geht.
+struct CachedScan {
+    let root: FileNode
+    var snapshot: Snapshot
+    var items: Int
+    var skipped: Int
+    var freed: Int64
+}
+
+func isPath(_ path: String, inside parent: String) -> Bool {
+    parent == "/" || path == parent || path.hasPrefix(parent + "/")
 }
 
 enum AgeFilter: String, CaseIterable, Identifiable {
@@ -332,8 +398,12 @@ enum ChartColorMode: String, CaseIterable, Identifiable {
 final class AppModel {
     var root: FileNode?
     var focus: FileNode?
+    /// Die im Diagramm und in den Spalten hervorgehobene Datei (Ordner stehen in `focus`).
+    var focusedFile: FileNode?
+    /// Angehakte Objekte.
     var selection: Set<String> = []
-    var expanded: Set<String> = []
+    /// Aufgeklappte Sammelzeilen („Kleine“/„Versteckte Elemente“).
+    var expandedGroups: Set<String> = []
     var revision = 0
     var isScanning = false
     var scannedItems = 0
@@ -344,7 +414,12 @@ final class AppModel {
     private(set) var forwardStack: [FileNode] = []
 
     // Ansicht
-    var tab: PanelTab = .tree
+    var mainTab: MainTab = .structure
+    var cleanTab: CleanTab = .cleanup
+    var showCleanSheet = false
+    var showHelp = false
+    var sidebarVisible = true
+    var searchVisible = false
     var colorMode: ChartColorMode = .folder
     var searchText = ""
     var kindFilter: FileKind?
@@ -355,6 +430,8 @@ final class AppModel {
     var volumeFree: Int64 = 0
     var freedBytes: Int64 = 0
     var recents: [String] = UserDefaults.standard.stringArray(forKey: "recents") ?? []
+    var customFolders: [String] = UserDefaults.standard.stringArray(forKey: "customFolders") ?? []
+    private(set) var scans: [String: CachedScan] = [:]
 
     // Duplikate
     var dupGroups: [DupGroup] = []
@@ -379,26 +456,95 @@ final class AppModel {
         panel.allowsMultipleSelection = false
         panel.prompt = "Analysieren"
         panel.message = "Wähle einen Ordner oder Datenträger zur Analyse"
-        if panel.runModal() == .OK, let url = panel.url { scan(url) }
+        if panel.runModal() == .OK, let url = panel.url {
+            let known = homeLocation.url.path == url.path
+                || volumeLocations().contains { $0.id == url.path }
+                || standardFolders().contains { $0.id == url.path }
+            if !known, !customFolders.contains(url.path) {
+                customFolders.append(url.path)
+                UserDefaults.standard.set(customFolders, forKey: "customFolders")
+            }
+            show(url)
+        }
     }
 
-    func quickLocations() -> [(String, URL)] {
+    func removeCustomFolder(_ path: String) {
+        customFolders.removeAll { $0 == path }
+        UserDefaults.standard.set(customFolders, forKey: "customFolders")
+    }
+
+    // MARK: Speicherorte der Seitenleiste
+
+    var homeLocation: SidebarLocation {
+        SidebarLocation(title: NSUserName(), symbol: "house.fill", url: FileManager.default.homeDirectoryForCurrentUser)
+    }
+
+    func volumeLocations() -> [SidebarLocation] {
+        let keys: [URLResourceKey] = [.volumeLocalizedNameKey, .volumeIsInternalKey]
+        let vols = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        return vols.compactMap { v in
+            let values = try? v.resourceValues(forKeys: Set(keys))
+            guard v.path == "/" || v.path.hasPrefix("/Volumes/") else { return nil }
+            return SidebarLocation(title: values?.volumeLocalizedName ?? v.lastPathComponent,
+                                   symbol: values?.volumeIsInternal == false ? "externaldrive.fill" : "internaldrive.fill",
+                                   url: v)
+        }
+    }
+
+    func standardFolders() -> [SidebarLocation] {
         let fm = FileManager.default
-        var out: [(String, URL)] = [("Benutzerordner", fm.homeDirectoryForCurrentUser)]
-        for (title, dir) in [("Schreibtisch", FileManager.SearchPathDirectory.desktopDirectory),
-                             ("Dokumente", .documentDirectory),
-                             ("Downloads", .downloadsDirectory),
-                             ("Programme", .applicationDirectory)] {
-            if let u = fm.urls(for: dir, in: .userDomainMask).first ?? fm.urls(for: dir, in: .localDomainMask).first {
-                out.append((title, u))
-            }
+        let entries: [(String, String, FileManager.SearchPathDirectory)] = [
+            ("Schreibtisch", "menubar.dock.rectangle", .desktopDirectory),
+            ("Downloads", "arrow.down.circle.fill", .downloadsDirectory),
+            ("Bilder", "camera.fill", .picturesDirectory),
+            ("Dokumente", "doc.fill", .documentDirectory),
+        ]
+        var out = entries.compactMap { e in
+            fm.urls(for: e.2, in: .userDomainMask).first.map { SidebarLocation(title: e.0, symbol: e.1, url: $0) }
         }
-        out.append(("Gesamter Mac (/)", URL(fileURLWithPath: "/")))
-        let vols = fm.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [.skipHiddenVolumes]) ?? []
-        for v in vols where v.path.hasPrefix("/Volumes/") {
-            out.append((v.lastPathComponent, v))
-        }
+        out.append(SidebarLocation(title: "Programme", symbol: "square.grid.2x2.fill", url: URL(fileURLWithPath: "/Applications")))
         return out
+    }
+
+    func customLocations() -> [SidebarLocation] {
+        customFolders.map {
+            SidebarLocation(title: ($0 as NSString).lastPathComponent, symbol: "folder.fill", url: URL(fileURLWithPath: $0))
+        }
+    }
+
+    /// Zeigt einen Speicherort: aus dem Zwischenspeicher, sonst per neuem Scan.
+    func show(_ url: URL) {
+        guard let cached = scans[url.path] else { scan(url); return }
+        guard root !== cached.root else { return }
+        context?.cancel()
+        context = nil
+        isScanning = false
+        dupContext?.cancel()
+        resetView()
+        lastURL = url
+        root = cached.root
+        focus = cached.root
+        snapshot = cached.snapshot
+        scannedItems = cached.items
+        skippedFolders = cached.skipped
+        freedBytes = cached.freed
+        updateVolume()
+        revision += 1
+    }
+
+    private func resetView() {
+        root = nil
+        focus = nil
+        focusedFile = nil
+        backStack = []
+        forwardStack = []
+        selection = []
+        expandedGroups = []
+        snapshot = Snapshot()
+        dupGroups = []
+        dupDone = false
+        dupRunning = false
+        kindFilter = nil
     }
 
     func cancelScan() {
@@ -423,17 +569,8 @@ final class AppModel {
         scannedItems = 0
         skippedFolders = 0
         freedBytes = 0
-        root = nil
-        focus = nil
-        backStack = []
-        forwardStack = []
-        selection = []
-        expanded = []
-        snapshot = Snapshot()
-        dupGroups = []
-        dupDone = false
-        dupRunning = false
-        kindFilter = nil
+        scans[url.path] = nil
+        resetView()
         revision += 1
 
         Task { [weak self] in
@@ -455,6 +592,7 @@ final class AppModel {
             self.scannedItems = ctx.items
             self.skippedFolders = ctx.skipped
             self.isScanning = false
+            self.scans[url.path] = CachedScan(root: result.0, snapshot: result.1, items: ctx.items, skipped: ctx.skipped, freed: 0)
             self.updateVolume()
             self.revision += 1
         }
@@ -475,31 +613,84 @@ final class AppModel {
 
     // MARK: Navigation / Auswahl
 
-    func select(_ node: FileNode, additive: Bool = false) {
-        if additive {
-            if selection.contains(node.id) { selection.remove(node.id) } else { selection.insert(node.id) }
-        } else {
-            selection = [node.id]
-        }
+    /// Hakt ein Objekt an oder ab. Liegt es in einem angehakten Ordner, ist es dadurch schon erfasst.
+    func toggleChecked(_ node: FileNode) {
+        guard !isCoveredByParent(node) else { return }
+        if selection.contains(node.id) { selection.remove(node.id) } else { selection.insert(node.id) }
+    }
+
+    func isCoveredByParent(_ node: FileNode) -> Bool {
         var p = node.parent
         while let q = p {
-            expanded.insert(q.id)
+            if selection.contains(q.id) { return true }
             p = q.parent
         }
+        return false
+    }
+
+    /// Macht ein Objekt zum aktuellen Eintrag in Spalten, Pfadleiste und Diagramm.
+    func activate(_ node: FileNode) {
+        var n: FileNode? = node
+        while let c = n, let parent = c.parent {
+            if c.isHidden {
+                expandedGroups.insert(ColumnGroup.hidden.key(in: parent))
+            } else if ColumnContent(parent).small.contains(where: { $0 === c }) {
+                expandedGroups.insert(ColumnGroup.small.key(in: parent))
+            }
+            n = parent
+        }
+        if node.isDirectory {
+            navigate(to: node)
+        } else {
+            navigate(to: node.parent ?? node)
+            focusedFile = node
+        }
+    }
+
+    /// Mitte des Diagramms: eine Ebene über dem aktuellen Ordner, damit dieser als Ring sichtbar bleibt.
+    var chartCenter: FileNode? { focus?.parent ?? focus }
+
+    var cursor: FileNode? { focusedFile ?? focus }
+
+    func visibleItems(in folder: FileNode) -> [FileNode] {
+        let c = ColumnContent(folder)
+        var out = c.shown
+        if expandedGroups.contains(ColumnGroup.small.key(in: folder)) { out += c.small }
+        if expandedGroups.contains(ColumnGroup.hidden.key(in: folder)) { out += c.hidden }
+        return out
+    }
+
+    /// Pfeiltasten ↑/↓: nächster sichtbarer Eintrag derselben Spalte.
+    func moveCursor(by delta: Int) {
+        guard let cur = cursor else { return }
+        guard let parent = cur.parent else { cursorIn(); return }
+        let items = visibleItems(in: parent)
+        guard let i = items.firstIndex(where: { $0 === cur }), items.indices.contains(i + delta) else { return }
+        activate(items[i + delta])
+    }
+
+    func cursorIn() {
+        guard let cur = cursor, cur.isDirectory, let first = visibleItems(in: cur).first else { return }
+        activate(first)
+    }
+
+    func cursorOut() {
+        if let parent = cursor?.parent { activate(parent) }
+    }
+
+    func toggleGroup(_ group: ColumnGroup, in folder: FileNode) {
+        let key = group.key(in: folder)
+        if expandedGroups.contains(key) { expandedGroups.remove(key) } else { expandedGroups.insert(key) }
     }
 
     /// Wechselt den im Diagramm gezeigten Ordner und merkt sich den Verlauf.
     func navigate(to node: FileNode) {
+        focusedFile = nil
         guard node !== focus else { return }
         if let f = focus { backStack.append(f) }
         forwardStack = []
         focus = node
         revision += 1
-    }
-
-    func drill(into node: FileNode) {
-        guard node.isDirectory, !node.children.isEmpty else { return }
-        navigate(to: node)
     }
 
     func goUp() {
@@ -514,6 +705,7 @@ final class AppModel {
         while let prev = backStack.popLast() {
             guard snapshot.index[prev.id] === prev else { continue }
             if let f = focus { forwardStack.append(f) }
+            focusedFile = nil
             focus = prev
             revision += 1
             return
@@ -524,39 +716,18 @@ final class AppModel {
         while let next = forwardStack.popLast() {
             guard snapshot.index[next.id] === next else { continue }
             if let f = focus { backStack.append(f) }
+            focusedFile = nil
             focus = next
             revision += 1
             return
         }
     }
 
-    /// Zeigt ein Objekt im Diagramm und im Baum.
+    /// Zeigt ein Objekt in Spalten und Diagramm.
     func showInChart(_ node: FileNode) {
-        tab = .tree
-        if node.isDirectory, !node.children.isEmpty {
-            navigate(to: node)
-        } else {
-            navigate(to: node.parent ?? node)
-            select(node)
-        }
-    }
-
-    func toggleExpanded(_ node: FileNode) {
-        if expanded.contains(node.id) { expanded.remove(node.id) } else { expanded.insert(node.id) }
-        revision += 1
-    }
-
-    func visibleRows() -> [FileRow] {
-        guard let focus else { return [] }
-        var out: [FileRow] = []
-        func walk(_ n: FileNode, _ depth: Int) {
-            for c in n.children {
-                out.append(FileRow(node: c, depth: depth))
-                if c.isDirectory, expanded.contains(c.id) { walk(c, depth + 1) }
-            }
-        }
-        walk(focus, 0)
-        return out
+        showCleanSheet = false
+        mainTab = .structure
+        activate(node)
     }
 
     /// Dateien (größte zuerst) unter dem aktuellen Ordner, gefiltert nach Suche, Typ und Alter.
@@ -609,7 +780,8 @@ final class AppModel {
         }
     }
 
-    func confirmAndDelete(_ nodes: [FileNode]) {
+    /// `permanent == nil` lässt im Dialog die Wahl zwischen Papierkorb und endgültigem Löschen.
+    func confirmAndDelete(_ nodes: [FileNode], permanent requested: Bool? = nil) {
         let top = pruned(nodes)
         guard !top.isEmpty else { return }
         let total = top.reduce(Int64(0)) { $0 + $1.size }
@@ -617,19 +789,28 @@ final class AppModel {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = top.count == 1 ? "„\(top[0].name)“ löschen?" : "\(top.count) Objekte löschen?"
-        alert.informativeText = top.count == 1
+        let summary = top.count == 1
             ? "\(formatBytes(total)) · \(top[0].url.path)"
             : "Zusammen \(formatBytes(total))"
-        alert.addButton(withTitle: "In den Papierkorb")
-        alert.addButton(withTitle: "Endgültig löschen")
-        alert.addButton(withTitle: "Abbrechen")
-        alert.buttons[1].hasDestructiveAction = true
+        alert.informativeText = requested == true ? summary + "\n\nDas lässt sich nicht rückgängig machen." : summary
 
         let permanent: Bool
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: permanent = false
-        case .alertSecondButtonReturn: permanent = true
-        default: return
+        if let requested {
+            alert.addButton(withTitle: requested ? "Endgültig löschen" : "In den Papierkorb")
+            alert.addButton(withTitle: "Abbrechen")
+            alert.buttons[0].hasDestructiveAction = requested
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            permanent = requested
+        } else {
+            alert.addButton(withTitle: "In den Papierkorb")
+            alert.addButton(withTitle: "Endgültig löschen")
+            alert.addButton(withTitle: "Abbrechen")
+            alert.buttons[1].hasDestructiveAction = true
+            switch alert.runModal() {
+            case .alertFirstButtonReturn: permanent = false
+            case .alertSecondButtonReturn: permanent = true
+            default: return
+            }
         }
 
         var removed: [FileNode] = []
@@ -671,9 +852,11 @@ final class AppModel {
                 p = q.parent
             }
             if let f = focus, f.isDescendant(of: node) { focus = parent }
+            if let f = focusedFile, f.isDescendant(of: node) { focusedFile = nil }
         }
         selection = []
         rebuildSnapshot()
+        syncCache(after: nodes)
         backStack = backStack.filter { snapshot.index[$0.id] === $0 }
         forwardStack = forwardStack.filter { snapshot.index[$0.id] === $0 }
         dupGroups = dupGroups.compactMap { g in
@@ -681,6 +864,20 @@ final class AppModel {
             return alive.count > 1 ? DupGroup(id: g.id, size: g.size, nodes: alive) : nil
         }
         revision += 1
+    }
+
+    /// Hält den aktuellen Scan aktuell und verwirft andere, die das Gelöschte enthalten.
+    private func syncCache(after removed: [FileNode]) {
+        let current = lastURL?.path
+        if let current, scans[current] != nil {
+            scans[current]?.snapshot = snapshot
+            scans[current]?.freed = freedBytes
+        }
+        for key in scans.keys where key != current {
+            if removed.contains(where: { isPath($0.url.path, inside: key) || isPath(key, inside: $0.url.path) }) {
+                scans[key] = nil
+            }
+        }
     }
 
     // MARK: Duplikate
@@ -730,10 +927,4 @@ final class AppModel {
     func keepOnly(_ node: FileNode, in group: DupGroup) {
         selection = Set(group.nodes.filter { $0 !== node }.map(\.id))
     }
-}
-
-struct FileRow: Identifiable {
-    let node: FileNode
-    let depth: Int
-    var id: String { node.id }
 }

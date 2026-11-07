@@ -13,7 +13,7 @@ Die App ist in SwiftUI geschrieben, hat keine Abhängigkeiten und läuft komplet
   - [2. Das Fenster im Überblick](#2-das-fenster-im-überblick)
   - [3. Das Diagramm](#3-das-diagramm)
   - [4. Navigation](#4-navigation)
-  - [5. Die fünf Ansichten](#5-die-fünf-ansichten)
+  - [5. Die Ansichten](#5-die-ansichten)
   - [6. Dateien auswählen und löschen](#6-dateien-auswählen-und-löschen)
   - [7. Tastenkürzel](#7-tastenkürzel)
 - [Zugriffsrechte (Festplattenvollzugriff)](#zugriffsrechte-festplattenvollzugriff)
@@ -25,12 +25,13 @@ Die App ist in SwiftUI geschrieben, hat keine Abhängigkeiten und läuft komplet
 
 ## Funktionen
 
-- **Sunburst-Diagramm** mit bis zu fünf Ebenen. Ein Klick auf einen Ordner springt hinein, ein Klick auf die Mitte führt eine Ebene hoch.
-- **Fünf Ansichten:** Baum, Dateien, Typen, Duplikate und Aufräumen.
+- **Sunburst-Diagramm** mit bis zu fünf Ebenen. Ein Klick auf ein Segment ruft den Eintrag auf, ein Klick auf die Mitte führt eine Ebene hoch.
+- **Ansichten:** Ordnerstruktur in Spalten und Größte Dateien, dazu Typen, Duplikate und Aufräumen unter „Mehr aufräumen“.
+- **Sechs Farbschemata**, umschaltbar oben rechts.
 - **Schnelle Suche und Filter** nach Dateiname, Dateityp und Alter.
 - **Duplikat-Suche** über den Inhalt (SHA-256). Hardlinks zählen dabei nicht als Duplikat.
 - **Aufräum-Vorschläge** für Caches, Xcode-Daten, `node_modules`, iPhone-Backups, Papierkorb und alte Installationsabbilder.
-- **Löschen mit Sicherheitsabfrage:** wahlweise in den Papierkorb oder endgültig. Die Statusleiste zeigt, wie viel Platz du in dieser Sitzung freigegeben hast.
+- **Löschen mit Sicherheitsabfrage:** wahlweise in den Papierkorb oder endgültig. Die Pfadleiste zeigt, wie viel Platz du in dieser Sitzung freigegeben hast.
 - **Drag & Drop:** Ordner einfach ins Fenster ziehen.
 - **Zuletzt gescannte Orte** und Schnellzugriff auf Benutzerordner, Schreibtisch, Dokumente, Downloads, Programme, den ganzen Mac und eingehängte Datenträger.
 - **Anzeige des freien Speicherplatzes** des gescannten Datenträgers.
@@ -63,9 +64,9 @@ Nach dem Start siehst du den Begrüßungsbildschirm. Es gibt mehrere Wege, einen
 | Weg | So geht's |
 | --- | --- |
 | **Ordner wählen** | Klick auf **Ordner wählen …** (oder ⌘O) und einen Ordner oder Datenträger auswählen. |
-| **Schnellzugriff** | Auf dem Begrüßungsbildschirm stehen Buttons für Benutzerordner, Schreibtisch usw. In der Symbolleiste öffnet ein längerer Klick auf das Ordner-Symbol ein Menü mit allen Orten, eingehängten Datenträgern und den zuletzt gescannten Ordnern. |
+| **Schnellzugriff** | In der Seitenleiste stehen Benutzerordner, Datenträger und die wichtigsten Ordner. Selbst gewählte Ordner kommen dazu; per Rechtsklick lassen sie sich wieder entfernen. |
 | **Drag & Drop** | Einen Ordner aus dem Finder ins App-Fenster ziehen. |
-| **Zuletzt** | Im Ordner-Menü der Symbolleiste unter „Zuletzt" (die letzten sechs Orte). |
+| **Zuletzt** | Im Verlaufsmenü oben in der Seitenleiste (die letzten sechs Orte). |
 
 Während des Scans zeigt die App einen Zähler der bisher gefundenen Objekte. Über **Abbrechen** kannst du den Vorgang stoppen. Mit **⌘R** (oder dem Pfeil-Symbol „Neu scannen") wiederholst du den letzten Scan, zum Beispiel nach Änderungen außerhalb der App.
 
@@ -74,26 +75,27 @@ Während des Scans zeigt die App einen Zähler der bisher gefundenen Objekte. Ü
 ### 2. Das Fenster im Überblick
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Symbolleiste: Ordner wählen · Neu scannen · Hoch │ Finder · Öffnen · Löschen │ Suche │
-├──────────────────────────────────────────────────────────────────────┤
-│ ‹ › ↑  Brotkrumen-Pfad:  Benutzer › makro › Library › Caches         │
-├───────────────────────────────┬──────────────────────────────────────┤
-│                               │ [ Baum | Dateien | Typen |           │
-│       Sunburst-Diagramm       │   Duplikate | Aufräumen ]            │
-│                               │                                      │
-│                               │   Liste der gewählten Ansicht        │
-│                               │                                      │
-│                               ├──────────────────────────────────────┤
-│                               │ Auswahl: 3 ausgewählt · 1,2 GB       │
-├───────────────────────────────┴──────────────────────────────────────┤
-│ Statusleiste: Pfad, Größe, Objekte, ohne Zugriff, freigegeben │ Frei: … │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────┬─────────────────────────────────────────────────────────┐
+│ ● ● ●  ▯ ◷ │ ⌕ [Ordnerstruktur | Größte Dateien]  Name  Größe  🎨 💬 ? │
+│            ├───────────────────────────────────┬─────────────────────┤
+│ Benutzer   │ Spalte │ Spalte │ Spalte          │                     │
+│ Speicher   │  ☐ Ordner   4,52 GB               │  Sunburst-Diagramm  │
+│ Ordner     │  ☑ Datei    1,06 GB               │                     │
+│            │  › Kleine / Versteckte Elemente   │                     │
+│ + Ordner   ├───────────────────────────────────┴─────────────────────┤
+│            │ Pfadleiste                       Frei: 156 GB von 995 GB │
+│ ▦ Mehr     ├─────────────────────────────────────────────────────────┤
+│  aufräumen │ 1,06 GB ausgewählt │ 1 Objekt ausgewählt     [Entfernen ⌄]│
+└────────────┴─────────────────────────────────────────────────────────┘
 ```
 
-- **Links** liegt das Diagramm, **rechts** die Listenansichten. Die Trennlinie dazwischen lässt sich verschieben.
-- Die **Brotkrumen-Leiste** zeigt den Pfad des aktuell angezeigten Ordners. Jeder Teil ist klickbar.
-- Die **Statusleiste** zeigt den gescannten Pfad, dessen Gesamtgröße und die Zahl der Objekte. Sie zeigt außerdem, wie viele Ordner nicht gelesen werden konnten (orange), wie viel Speicher du schon freigegeben hast (grün) und rechts den freien Platz des Datenträgers.
+- **Seitenleiste:** Speicherorte. Ein Haken zeigt, dass ein Ort schon analysiert ist und sofort öffnet. Darüber blendest du die Leiste aus und erreichst Verlauf und „Neu scannen“.
+- **Kopfzeile:** Suche, Umschalter der beiden Hauptansichten, Name und Größe des Scans, Farbschema, Rückmeldung und Hilfe.
+- **Mitte:** die Spalten oder die Liste der größten Dateien. Die Trennlinie zum Diagramm lässt sich verschieben.
+- **Pfadleiste:** Jeder Teil ist klickbar. Rechts stehen der freie Platz, die Zahl der Ordner ohne Zugriff (orange) und der schon freigegebene Speicher (grün).
+- **Auswahlleiste:** Summe der angehakten Objekte und der Knopf **Entfernen**.
+
+Das **Farbschema** wechselst du oben rechts über die Palette: Nachtblau (bisher), Vibrant Tech Startup Culture, Balanced Dual Tone, Data-Driven, Playful Professional oder Innovative Tech Marketing. Die Wahl bleibt beim nächsten Start erhalten.
 
 ### 3. Das Diagramm
 
@@ -104,13 +106,12 @@ Das Diagramm ist ein **Sunburst**: Der Ordner, den du gerade ansiehst, bildet di
 | Aktion | Wirkung |
 | --- | --- |
 | Mit der Maus über ein Segment fahren | In der Mitte erscheinen Name, Größe und Anteil am angezeigten Ordner. |
-| **Klick auf einen Ordner** | Springt in diesen Ordner, er wird zur neuen Mitte. |
-| **Klick auf eine Datei** | Wählt die Datei aus. Sie wird im Baum markiert und aufgeklappt. |
-| **⌘-Klick oder ⇧-Klick** | Fügt ein Segment zur Auswahl hinzu oder nimmt es heraus, ohne zu springen. So wählst du mehrere Objekte aus. |
+| **Klick auf ein Segment** | Ruft den Ordner oder die Datei in den Spalten auf. Die Mitte zeigt die Ebene darüber, der aufgerufene Ordner bleibt so als Ring sichtbar. |
+| **⌘-Klick oder ⇧-Klick** | Hakt das Segment an oder ab, ohne zu springen. |
 | **Klick auf die Mitte** | Eine Ebene nach oben. |
-| Klick ins Leere | Hebt die Auswahl auf. |
 
-**Farbmodus:** Oben links im Diagramm wechselst du zwischen zwei Darstellungen:
+
+**Farbmodus:** Das Symbol unten rechts im Diagramm wechselt zwischen zwei Darstellungen:
 
 - **Ordner:** Jeder Hauptordner bekommt eine eigene Farbe. Seine Unterordner erscheinen in Abstufungen davon. So siehst du schnell, welcher Bereich wie viel belegt.
 - **Typ:** Die Farbe zeigt den Dateityp (Bilder, Videos, Audio, Dokumente, Archive, Code, Programme, Sonstige). Unten links erscheint eine Legende. Ordner sind grau.
@@ -119,39 +120,29 @@ Segmente, die kleiner als etwa 0,1 % des Kreises sind, werden nicht gezeichnet. 
 
 ### 4. Navigation
 
-- **Zurück / Vor** (‹ und ›, ⌘[ und ⌘]) funktionieren wie im Browser über den Verlauf der besuchten Ordner.
-- **Eine Ebene hoch** (↑, ⌘↑) wechselt zum übergeordneten Ordner.
-- **Brotkrumen:** Ein Klick auf einen Ordner im Pfad springt direkt dorthin.
-- **Doppelklick auf einen Ordner** im Baum springt hinein. Ein Doppelklick auf eine Datei öffnet sie mit der Standard-App.
-- **Im Diagramm zeigen** (Rechtsklick) springt zu einem Objekt aus Listen wie „Dateien" oder „Aufräumen" und markiert es im Baum.
+- **Zurück / Vor** (⌘[ und ⌘], auch im Verlaufsmenü) funktionieren wie im Browser über den Verlauf der besuchten Ordner.
+- **Eine Ebene hoch** (⌘↑, auch im Verlaufsmenü) wechselt zum übergeordneten Ordner.
+- **Pfadleiste:** Ein Klick auf einen Ordner im Pfad springt direkt dorthin.
+- **Klick auf einen Ordner** in einer Spalte öffnet ihn in der nächsten Spalte. Ein Doppelklick auf eine Datei öffnet sie mit der Standard-App.
+- **In Spalten und Diagramm zeigen** (Rechtsklick) springt von einem Objekt aus „Größte Dateien“ oder „Mehr aufräumen“ zu seinem Platz.
 
-### 5. Die fünf Ansichten
+### 5. Die Ansichten
 
-Rechts oben wählst du mit dem Umschalter eine der fünf Ansichten. Alle beziehen sich auf den **Scan**, nicht auf eine Live-Suche im Dateisystem.
+Alle Ansichten beziehen sich auf den **Scan**, nicht auf eine Live-Suche im Dateisystem.
 
-#### Baum
+#### Ordnerstruktur
 
-Zeigt den aktuell angezeigten Ordner als aufklappbare Liste, **größte Einträge zuerst**.
+Ein Klick auf einen Ordner öffnet ihn in der nächsten Spalte. Jede Spalte zeigt die zehn größten sichtbaren Objekte ab 100 KB. Alles Weitere liegt in den aufklappbaren Sammelzeilen **Kleine Elemente** und **Versteckte Elemente**.
 
-- Spalten: Name, **Anteil** (Balken und Prozent am angezeigten Ordner) und **Größe**.
-- Mit dem Pfeil vor einem Ordner klappst du ihn auf oder zu.
-- Doppelklick auf einen Ordner: hineinspringen. Doppelklick auf eine Datei: öffnen.
-- Rechtsklick öffnet das Kontextmenü (siehe [Auswählen und Löschen](#6-dateien-auswählen-und-löschen)).
+#### Größte Dateien
 
-#### Dateien
+Zeigt die größten Dateien im aktuellen Ordner, mit Filtern nach Typ und Alter. Die Lupe in der Kopfzeile sucht nach Dateinamen und zeigt ihre Treffer hier.
 
-Eine **flache Liste aller Dateien** unterhalb des angezeigten Ordners, **größte zuerst**. Sie eignet sich, um die größten Einzeldateien zu finden, egal wo sie liegen.
-
-- **Typfilter:** Alle Typen oder gezielt Bilder, Videos, Audio, Dokumente, Archive & Images, Code & Daten, Programme oder Sonstige.
-- **Altersfilter:** Beliebiges Alter, älter als 30 Tage, 6 Monate, 1 Jahr oder 3 Jahre (nach Änderungsdatum). Damit findest du alte Dateien, die du vermutlich nicht mehr brauchst.
-- **Suche:** Das Suchfeld oben rechts in der Symbolleiste filtert nach Dateinamen. Sobald du tippst, wechselt die App automatisch in diese Ansicht.
-- **Zurücksetzen** setzt Typ, Alter und Suche zurück.
-- Jede Zeile zeigt Name, Ordnerpfad, Änderungsdatum und Größe.
-- Aus Performance-Gründen zeigt die Liste höchstens 1000 Treffer. Ein „+" hinter der Anzahl weist darauf hin, dass es mehr gibt. Verfeinere dann die Filter.
+**Mehr aufräumen** unten in der Seitenleiste öffnet die drei folgenden Ansichten.
 
 #### Typen
 
-Zeigt, **welche Dateitypen** wie viel Platz belegen. Pro Typ siehst du Anzahl, Anteil (Balken und Prozent) und Größe, sortiert nach Größe. Ein Klick auf eine Zeile öffnet die Ansicht „Dateien" mit dem passenden Typfilter.
+Zeigt, **welche Dateitypen** wie viel Platz belegen. Pro Typ siehst du Anzahl, Anteil (Balken und Prozent) und Größe, sortiert nach Größe. Ein Klick auf eine Zeile öffnet „Größte Dateien“ mit dem passenden Typfilter.
 
 Die Zuordnung erfolgt über die Dateiendung:
 
@@ -177,7 +168,7 @@ Findet **identische Dateien**, auch wenn sie unterschiedlich heißen oder an ver
    - **Kopien markieren (älteste behalten):** markiert in jeder Gruppe alle Dateien außer der ältesten.
    - **Rechtsklick → Nur diese Kopie behalten:** markiert in der Gruppe alle anderen Dateien.
    - Oder wähle einzelne Dateien von Hand aus.
-5. Lösche die markierten Dateien über die Leiste unten oder die Symbolleiste.
+5. Lösche die markierten Dateien über die Leiste unten.
 
 **So wird verglichen:** Erst nach Dateigröße, dann über die ersten 64 KB, zuletzt über den vollständigen SHA-256-Hash. Zwei Dateien gelten nur als Duplikat, wenn ihr Inhalt Byte für Byte übereinstimmt. **Hardlinks** (mehrere Namen für dieselbe Datei auf der Platte) werden nicht gezählt, weil sie keinen zusätzlichen Platz belegen. Die Ansicht zeigt maximal 300 Gruppen.
 
@@ -209,10 +200,10 @@ Doppelklick auf einen Eintrag springt im Diagramm dorthin, damit du ansehen kann
 
 **Auswählen**
 
-- Klick auf eine Zeile wählt sie aus. Mit ⌘ oder ⇧ wählst du mehrere Zeilen aus (wie im Finder).
-- Im Diagramm wählst du mit ⌘-Klick oder ⇧-Klick mehrere Segmente aus.
-- Die Auswahl gilt in allen Ansichten. Unter der Liste steht die Zusammenfassung, zum Beispiel „3 ausgewählt · 1,2 GB", mit den Buttons **Aufheben**, **Im Finder zeigen** und **Löschen …**.
-- Ist ein Ordner und eine seiner Dateien gleichzeitig ausgewählt, zählt nur der Ordner. So wird nichts doppelt gezählt oder gelöscht.
+- Hake Objekte in den Spalten oder in der Liste an. Im Diagramm geht das mit ⌘-Klick oder ⇧-Klick, in den Spalten mit der Leertaste.
+- Die Auswahl gilt in allen Ansichten. Die Auswahlleiste unten zeigt Größe und Anzahl.
+- In den Ansichten unter „Mehr aufräumen“ wählst du Zeilen wie im Finder aus, mit ⌘ oder ⇧ auch mehrere.
+- Ist ein Ordner angehakt, gelten seine Inhalte als mit ausgewählt. So wird nichts doppelt gezählt oder gelöscht.
 
 **Kontextmenü (Rechtsklick)**
 
@@ -220,7 +211,7 @@ Doppelklick auf einen Eintrag springt im Diagramm dorthin, damit du ansehen kann
 | --- | --- |
 | Im Finder zeigen | Öffnet den Finder und markiert das Objekt (bei Mehrfachauswahl alle). |
 | Öffnen | Öffnet die Datei oder den Ordner mit der Standard-App. |
-| Im Diagramm zeigen | Springt im Diagramm und im Baum zum Objekt. |
+| In Spalten und Diagramm zeigen | Springt in Spalten und Diagramm zum Objekt. |
 | Pfad kopieren | Kopiert den vollständigen Pfad in die Zwischenablage. |
 | Löschen … | Startet den Löschdialog. |
 
@@ -228,13 +219,15 @@ Ist das angeklickte Objekt Teil der aktuellen Auswahl, gilt die Aktion für die 
 
 **Löschen**
 
-Beim Löschen (Symbolleiste, Kontextmenü, Auswahl-Leiste oder ⌘⌫) erscheint immer eine Sicherheitsabfrage mit Name und Größe. Du hast drei Optionen:
+**Entfernen** unten rechts legt die Auswahl nach einer Sicherheitsabfrage mit Name und Größe in den Papierkorb. Der Pfeil daneben bietet zusätzlich:
 
-- **In den Papierkorb:** Die Dateien landen im Papierkorb und lassen sich dort wiederherstellen. Der Speicher wird aber **erst frei, wenn du den Papierkorb leerst**.
+- **In den Papierkorb legen:** Die Dateien lassen sich dort wiederherstellen. Der Speicher wird aber **erst frei, wenn du den Papierkorb leerst**.
 - **Endgültig löschen:** Die Dateien werden sofort und **unwiderruflich** entfernt.
-- **Abbrechen:** Es passiert nichts.
+- **Im Finder zeigen** und **Auswahl aufheben**.
 
-Nach dem Löschen aktualisiert die App Diagramm, Größen und Listen sofort, **ohne neu zu scannen**. Die Statusleiste zählt mit, wie viel du in dieser Sitzung freigegeben hast. Konnte etwas nicht gelöscht werden (zum Beispiel wegen fehlender Rechte), zeigt die App eine Fehlermeldung mit den betroffenen Objekten.
+Das Kontextmenü und ⌘⌫ starten ebenfalls den Löschdialog.
+
+Nach dem Löschen aktualisiert die App Diagramm, Größen und Listen sofort, **ohne neu zu scannen**. Die Pfadleiste zählt mit, wie viel du in dieser Sitzung freigegeben hast. Konnte etwas nicht gelöscht werden (zum Beispiel wegen fehlender Rechte), zeigt die App eine Fehlermeldung mit den betroffenen Objekten.
 
 ### 7. Tastenkürzel
 
@@ -246,14 +239,17 @@ Nach dem Löschen aktualisiert die App Diagramm, Größen und Listen sofort, **o
 | ⌘[ | Zurück |
 | ⌘] | Vor |
 | ⌘⌫ | Auswahl löschen (mit Rückfrage) |
-| ⌘-Klick / ⇧-Klick | Mehrfachauswahl (Liste und Diagramm) |
-| Doppelklick | Ordner: hineinspringen · Datei: öffnen |
+| ⌘F | Dateien suchen |
+| ↑ ↓ ← → | In den Spalten bewegen |
+| Leertaste | Aktuellen Eintrag an- oder abhaken |
+| ⌘-Klick / ⇧-Klick im Diagramm | An- oder abhaken |
+| Doppelklick auf eine Datei | Öffnen |
 
 ## Zugriffsrechte (Festplattenvollzugriff)
 
 DiskAnalyzer läuft **ohne App-Sandbox**, damit sie beliebige Ordner lesen kann. macOS schützt aber manche Bereiche (zum Beispiel Mail, Fotos, Safari-Daten oder Teile von `~/Library`) zusätzlich.
 
-Zeigt die Statusleiste **„N Ordner ohne Zugriff"** in Orange, konnten diese Ordner nicht gelesen werden. Ihr Platzbedarf fehlt dann in der Auswertung, und die Summe ist niedriger als in Wirklichkeit. So behebst du das:
+Zeigt die Pfadleiste **„N Ordner ohne Zugriff"** in Orange, konnten diese Ordner nicht gelesen werden. Ihr Platzbedarf fehlt dann in der Auswertung, und die Summe ist niedriger als in Wirklichkeit. So behebst du das:
 
 1. Öffne **Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff**.
 2. Aktiviere den Schalter für **DiskAnalyzer** (über **+** hinzufügen, falls die App fehlt).
@@ -304,11 +300,15 @@ ditto -c -k --sequesterRsrc --keepParent DiskAnalyzer.app DiskAnalyzer.zip
 | Datei | Inhalt |
 | --- | --- |
 | `DiskAnalyzerApp.swift` | App-Einstieg, Fenster, Start-Argument `--scan` |
-| `ContentView.swift` | Hauptfenster: Symbolleiste, Brotkrumen, Statusleiste, Drag & Drop |
+| `ContentView.swift` | Hauptfenster: Kopfzeile, Pfadleiste, Auswahlleiste, „Mehr aufräumen“, Hilfe, Drag & Drop |
+| `SidebarView.swift` | Seitenleiste mit Speicherorten und Verlauf |
+| `ColumnsView.swift` | Ansichten „Ordnerstruktur“ (Spalten) und „Größte Dateien“ |
+| `Theme.swift` | Farbzugriff, Bausteine, Fensterkonfiguration |
+| `ThemeStore.swift` | Die sechs Farbschemata und ihre Auswahl |
 | `Models.swift` | Datenmodell, Scanner, Dateitypen, Aufräum-Regeln, Filter, App-Zustand und Löschlogik |
 | `SunburstView.swift` | Berechnung und Zeichnung des Kreisdiagramms |
-| `FileListView.swift` | Baumansicht, Kontextmenü, Auswahl-Leiste |
-| `Panels.swift` | Ansichten „Dateien", „Typen", „Duplikate" und „Aufräumen" |
+| `NodeActions.swift` | Kontextmenü, Auswahl-Leiste im Aufräum-Fenster |
+| `Panels.swift` | Ansichten „Typen“, „Duplikate“ und „Aufräumen“ |
 | `Duplicates.swift` | Duplikat-Suche (Größe → Dateianfang → SHA-256) |
 | `Assets.xcassets` | App-Icon |
 

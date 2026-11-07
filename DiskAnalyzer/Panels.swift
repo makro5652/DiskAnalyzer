@@ -1,88 +1,5 @@
 import SwiftUI
 
-// MARK: - Dateien (flach, filterbar)
-
-struct FilesPanel: View {
-    @Bindable var model: AppModel
-
-    var body: some View {
-        let _ = model.revision
-        let result = model.filteredFiles()
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Menu {
-                    Button("Alle Typen") { model.kindFilter = nil }
-                    Divider()
-                    ForEach(FileKind.allCases) { k in
-                        Button { model.kindFilter = k } label: { Label(k.label, systemImage: k.symbol) }
-                    }
-                } label: {
-                    Text(model.kindFilter?.label ?? "Alle Typen")
-                }
-                .fixedSize()
-                Menu {
-                    ForEach(AgeFilter.allCases) { a in Button(a.label) { model.ageFilter = a } }
-                } label: {
-                    Text(model.ageFilter.label)
-                }
-                .fixedSize()
-                Spacer()
-                if model.kindFilter != nil || model.ageFilter != .all || !model.searchText.isEmpty {
-                    Button("Zurücksetzen") {
-                        model.kindFilter = nil
-                        model.ageFilter = .all
-                        model.searchText = ""
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            HStack {
-                Text("\(result.items.count)\(result.truncated ? "+" : "") Dateien · größte zuerst"
-                     + (model.focus !== model.root ? " · in „\(model.focus?.name ?? "")“" : ""))
-                Spacer()
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 4)
-            Divider()
-
-            if result.items.isEmpty {
-                ContentUnavailableView("Keine Dateien", systemImage: "doc.questionmark",
-                                       description: Text("Mit den aktuellen Filtern wurde nichts gefunden."))
-            } else {
-                List(result.items, selection: $model.selection) { f in
-                    HStack(spacing: 8) {
-                        Image(systemName: f.kind.symbol)
-                            .foregroundStyle(f.kind.color)
-                            .frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(f.name).lineLimit(1).truncationMode(.middle)
-                            Text(f.folderPath)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.head)
-                        }
-                        Spacer()
-                        Text(formatDate(f.modified))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        Text(formatBytes(f.size))
-                            .monospacedDigit()
-                            .frame(width: 74, alignment: .trailing)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { model.open(f) }
-                    .contextMenu { NodeActions(model: model, node: f) }
-                }
-                .listStyle(.inset)
-            }
-        }
-    }
-}
-
 // MARK: - Typen
 
 struct TypesPanel: View {
@@ -118,11 +35,13 @@ struct TypesPanel: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 model.kindFilter = k
-                model.tab = .files
+                model.mainTab = .largest
+                model.showCleanSheet = false
             }
             .help("Klicken, um alle Dateien dieses Typs zu sehen")
         }
         .listStyle(.inset)
+                .scrollContentBackground(.hidden)
     }
 }
 
@@ -222,6 +141,7 @@ struct DuplicatesPanel: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -281,6 +201,7 @@ struct CleanupPanel: View {
                     .contextMenu { NodeActions(model: model, node: item.node) }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
     }
